@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}CropGuard AI - Detect Crop Pests Before They Spread{% endblock %}
+{% block content %}
+
+<div class="home-wrap home-wrap--temporary-visuals">
+  <div class="ambient-grid"></div>
+  <div class="ambient-noise"></div>
+  <div class="ambient-glow ambient-glow--left"></div>
+  <div class="ambient-glow ambient-glow--right"></div>
+
+  <nav class="home-nav">
+    <a href="/" class="nav-logo">
+      <div class="nav-logo-icon">CG</div>
+      <span>CropGuard<strong>AI</strong></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#solutions">Solutions</a>
+    </div>
+    <div class="nav-actions">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+        <span class="theme-toggle__icon">◐</span>
+        <span class="theme-toggle__label">Dark mode</span>
+      </button>
+      {% if is_authenticated %}
+      <a href="/chat" class="btn-outline">Open Workspace</a>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="nav-auth-form">
+        <button type="submit" class="nav-cta">Logout</button>
+      </form>
+      {% else %}
+      <a href="{{ url_for('auth.login') }}" class="btn-outline">Login</a>
+      <a href="{{ url_for('auth.signup') }}" class="nav-cta">Sign Up</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-badge glass-chip"><span class="badge-dot"></span> Smart Farming, Practical Crop Guidance</div>
+      <h1 class="hero-h1">AI crop advisory for faster farm decisions across Andhra Pradesh.</h1>
+      <p class="hero-sub">
+        CropGuard brings photo-based pest detection, district-aware crop intelligence, treatment guidance,
+        and follow-up support into one modern platform for farmers, agronomists, and field teams.
+      </p>
+      <div class="hero-actions">
+        <a href="/chat" class="btn-primary">Start Free Analysis</a>
+        <a href="#solutions" class="btn-outline">Explore solutions</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><strong>26</strong><span>District contexts</span></div>
+        <div class="stat"><strong>50+</strong><span>Crops supported</span></div>
+        <div class="stat"><strong>1</strong><span>Unified advisory workflow</span></div>
+      </div>
+    </div>
+
+    <div class="hero-right agrarian-panel">
+      <div class="agrarian-panel__image"></div>
+      <div class="agrarian-panel__card">
+        <div class="agrarian-panel__tabs" aria-hidden="true">
+          <span>Diagnosis</span>
+          <span>Districts</span>
+          <span>Advisories</span>
+          <span>Support</span>
+        </div>
+        <div class="agrarian-panel__eyebrow">Field-ready platform</div>
+        <h3>Built for diagnosis, advisories, and operational follow-through.</h3>
+        <div class="agrarian-pipeline" aria-label="CropGuard workflow">
+          <div class="pipeline-step">
+            <span class="pipeline-step__num">01</span>
+            <strong>Upload</strong>
+            <span>Leaf, fruit, or stem image</span>
+          </div>
+          <span class="pipeline-arrow" aria-hidden="true">→</span>
+          <div class="pipeline-step">
+            <span class="pipeline-step__num">02</span>
+            <strong>Analyze</strong>
+            <span>AI + district context</span>
+          </div>
+          <span class="pipeline-arrow" aria-hidden="true">→</span>
+          <div class="pipeline-step">
+            <span class="pipeline-step__num">03</span>
+            <strong>Act</strong>
+            <span>Treatment and follow-up</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="solutions-strip" id="solutions">
+    <div class="section-label">Explore Our Solutions</div>
+    <h2 class="section-title">From crop diagnosis to field-ready recommendations.</h2>
+    <div class="solutions-grid">
+      <article class="solution-card solution-card--ai">
+        <div class="solution-card__media"></div>
+        <div class="solution-card__body">
+          <div class="solution-card__kicker">AI Crop Analysis</div>
+          <h3>Conversational pest diagnosis with visual crop support.</h3>
+          <p>Guide farmers and teams with a modern advisory experience built around photos, context, and quick follow-up questions.</p>
+          <a href="/chat" class="btn-outline">Launch analysis</a>
+        </div>
+      </article>
+      <article class="solution-card solution-card--district">
+        <div class="solution-card__media"></div>
+        <div class="solution-card__body">
+          <div class="solution-card__kicker">District Intelligence</div>
+          <h3>Localized crop support shaped by AP districts and patterns.</h3>
+          <p>Use district crop context, likely risks, and region-aware treatment guidance to improve confidence and speed.</p>
+          <a href="#features" class="btn-outline">See platform benefits</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="section-label">Platform Benefits</div>
+    <h2 class="section-title">Designed for practical agricultural workflows.</h2>
+    <p class="section-sub">A cleaner, more structured experience inspired by modern agri-technology platforms.</p>
+    <div class="features-grid">
+      <div class="feature-card feature-card--accent">
+        <div class="fc-icon">01</div>
+        <h3>Photo-Based Detection</h3>
+        <p>Analyze crop images directly from the browser to identify visible pest or disease symptoms.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-icon">02</div>
+        <h3>Contextual Crop Support</h3>
+        <p>Pair diagnosis with crop type, district, and follow-up questions for more grounded recommendations.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-icon">03</div>
+        <h3>Treatment Guidance</h3>
+        <p>Provide pesticide suggestions, dosage direction, urgency, and organic alternatives in one flow.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-icon">04</div>
+        <h3>Operational Simplicity</h3>
+        <p>Reduce friction for users who need immediate answers instead of complex dashboards and scattered tools.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="crop-select-section">
+    <div class="section-label">Supported Crops</div>
+    <h2 class="section-title">What are you growing?</h2>
+    <p class="section-sub">Select a crop to start and we will detect pests specific to it.</p>
+    <div class="crop-storyboard">
+      <div class="crop-storyboard__intro reveal-card">
+        <div class="crop-storyboard__kicker">Crop map</div>
+        <p>Choose the crop you are growing and jump into a district-aware diagnosis flow built for local conditions, treatment patterns, and common AP outbreaks.</p>
+      </div>
+      <div class="crop-quick-grid crop-quick-grid--editorial">
+        {% for crop in [
+          ("Paddy","Rice fields","paddy","🌾","https://images.unsplash.com/photo-1599328580087-15c9dab481f3?auto=format&fit=crop&w=1200&q=80"),
+          ("Chilli","Spice crop","chilli","🌶","https://images.unsplash.com/photo-1518725750399-7a73d335dd8d?auto=format&fit=crop&w=1200&q=80"),
+          ("Coconut","Tree crop","coconut","🥥","https://images.unsplash.com/photo-1586078074298-05dca4848695?auto=format&fit=crop&w=1200&q=80"),
+          ("Banana","Fruit crop","banana","🍌","https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=1200&q=80"),
+          ("Sunflower","Oil crop","sunflower","🌻","https://images.unsplash.com/photo-1722544078565-963a7e917ab7?auto=format&fit=crop&w=1200&q=80"),
+          ("Sugarcane","Cash crop","sugarcane","🎋","https://images.unsplash.com/photo-1719424668314-a0def541377b?auto=format&fit=crop&w=1200&q=80"),
+          ("Tomato","Vegetable","tomato","🍅","https://images.unsplash.com/photo-1471194402529-8e0f5a675de6?auto=format&fit=crop&w=1200&q=80"),
+          ("Tobacco","Leaf crop","tobacco","🍂","https://images.unsplash.com/photo-1670897521181-e37bab953edb?auto=format&fit=crop&w=1200&q=80"),
+          ("Groundnut","Dryland crop","groundnut","🥜","https://images.unsplash.com/photo-1723110568223-f83071ddd4e5?auto=format&fit=crop&w=1200&q=80"),
+          ("Cotton","Fiber crop","cotton","☁","https://images.unsplash.com/photo-1616431101491-554c0932ea40?auto=format&fit=crop&w=1200&q=80"),
+          ("Mango","Orchard","mango","🥭","https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=1200&q=80"),
+          ("Turmeric","Rhizome crop","turmeric","🫚","https://images.unsplash.com/photo-1768729341334-666d6fe1385a?auto=format&fit=crop&w=1200&q=80")
+        ] %}
+        <a href="/chat" class="crop-tile crop-tile--editorial crop-tile--{{ crop[2] }} reveal-card" style="--crop-image: url('{{ crop[4] }}');">
+          <span class="crop-tile__orbit"></span>
+          <div class="crop-tile__media" aria-hidden="true">
+            <span class="crop-tile__emoji">{{ crop[3] }}</span>
+          </div>
+          <span class="crop-tile__name">{{ crop[0] }}</span>
+          <span class="crop-tile__meta">{{ crop[1] }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="districts-section">
+    <div class="districts-inner">
+      <div class="districts-text">
+        <div class="section-label">Andhra Pradesh</div>
+        <h2>Built for all 26 districts</h2>
+        <p>Our AI knows the dominant crops, seasonal patterns, and common pests for every district in AP, from Srikakulam in the north to Chittoor in the south.</p>
+        <div class="district-chips">
+          <span>Guntur</span><span>Krishna</span><span>East Godavari</span>
+          <span>West Godavari</span><span>Kurnool</span><span>Anantapur</span>
+          <span>Chittoor</span><span>Prakasam</span><span>Kadapa</span>
+          <span>Kakinada</span><span>Vizag</span><span>+ 15 more</span>
+        </div>
+        <a href="/chat" class="btn-primary" style="margin-top:1.5rem;display:inline-block">
+          Start for your district
+        </a>
+      </div>
+      <div class="districts-card">
+        <div class="dc-header">District crop stats</div>
+        <div class="dc-row">
+          <span class="dc-crop">Chilli</span>
+          <span class="dc-district">Guntur</span>
+          <div class="dc-bar"><div style="width:90%"></div></div>
+        </div>
+        <div class="dc-row">
+          <span class="dc-crop">Coconut</span>
+          <span class="dc-district">East Godavari</span>
+          <div class="dc-bar"><div style="width:75%"></div></div>
+        </div>
+        <div class="dc-row">
+          <span class="dc-crop">Sunflower</span>
+          <span class="dc-district">Kurnool</span>
+          <div class="dc-bar"><div style="width:68%"></div></div>
+        </div>
+        <div class="dc-row">
+          <span class="dc-crop">Sugarcane</span>
+          <span class="dc-district">Krishna</span>
+          <div class="dc-bar"><div style="width:82%"></div></div>
+        </div>
+        <div class="dc-row">
+          <span class="dc-crop">Groundnut</span>
+          <span class="dc-district">Anantapur</span>
+          <div class="dc-bar"><div style="width:71%"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-section">
+    <div class="cta-inner">
+      <h2>Ready to protect your crop?</h2>
+      <p>Free to use. No login required. Works for all AP districts.</p>
+      <a href="/chat" class="btn-primary btn-primary--lg">Start Free Analysis</a>
+    </div>
+  </section>
+
+  <footer class="home-footer">
+    <div class="footer-logo">CG CropGuard<strong>AI</strong></div>
+    <p>Built for Andhra Pradesh farmers. Powered by Google Gemini AI.</p>
+    <div class="footer-links">
+      <a href="/chat">Launch App</a>
+      <a href="#features">Features</a>
+      <a href="#solutions">Solutions</a>
+    </div>
+  </footer>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/home.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{% if auth_mode == "signup" %}Create Account{% else %}Login{% endif %} - CropGuard AI{% endblock %}
+{% block content %}
+<div class="auth-shell">
+  <div class="auth-shell__visual"></div>
+  <section class="auth-card">
+    <a href="/" class="auth-card__brand">
+      <div class="nav-logo-icon">CG</div>
+      <span>CropGuard<strong>AI</strong></span>
+    </a>
+
+    <div class="auth-card__header">
+      <div class="section-label">{% if auth_mode == "signup" %}Create Account{% else %}Welcome Back{% endif %}</div>
+      <h1>{% if auth_mode == "signup" %}Sign up to save your CropGuard workspace.{% else %}Login to continue to CropGuard.{% endif %}</h1>
+      <p>{% if auth_mode == "signup" %}Create an account to keep your access secured and continue using the advisory workflow.{% else %}Access your advisory workspace and continue with crop analysis and follow-up support.{% endif %}</p>
+    </div>
+
+    <form class="auth-form" method="post">
+      <input type="hidden" name="next" value="{{ next_url }}">
+
+      {% if auth_mode == "signup" %}
+      <label class="auth-field">
+        <span>Full name</span>
+        <input type="text" name="full_name" placeholder="Your name">
+      </label>
+      {% endif %}
+
+      <label class="auth-field">
+        <span>Email address</span>
+        <input type="email" name="email" placeholder="[email protected]" required>
+      </label>
+
+      <label class="auth-field">
+        <span>Password</span>
+        <input type="password" name="password" placeholder="Enter your password" required>
+      </label>
+
+      {% if auth_mode == "signup" %}
+      <label class="auth-field">
+        <span>Confirm password</span>
+        <input type="password" name="confirm_password" placeholder="Confirm your password" required>
+      </label>
+      {% endif %}
+
+      <button type="submit" class="btn-primary auth-submit">
+        {% if auth_mode == "signup" %}Create account{% else %}Login{% endif %}
+      </button>
+    </form>
+
+    <div class="auth-switch">
+      {% if auth_mode == "signup" %}
+      Already have an account? <a href="{{ url_for('auth.login', next=next_url) }}">Login</a>
+      {% else %}
+      New to CropGuard? <a href="{{ url_for('auth.signup', next=next_url) }}">Create an account</a>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}
