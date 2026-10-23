@@ -7,6 +7,10 @@ REPO=https://github.com/vedhakoushik/cropguard.git
 BRANCH=${BRANCH:-aws-migration}
 APP_DIR=/opt/cropguard
 
+IMDS_TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+REGION=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+echo "AWS_REGION=$REGION" > /etc/cropguard.env
+
 dnf install -y git nginx python3.11 python3.11-pip postgresql16
 
 id cropguard &>/dev/null || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin cropguard
@@ -32,4 +36,4 @@ nginx -t
 systemctl daemon-reload
 systemctl enable cropguard nginx
 systemctl restart cropguard nginx
-echo "CropGuard deployed from branch $BRANCH"
+echo "CropGuard deployed from branch $BRANCH in $REGION"

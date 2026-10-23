@@ -8,7 +8,7 @@ User=cropguard
 Group=cropguard
 WorkingDirectory=/opt/cropguard/backend
 Environment=SECRET_ID=cropguard/prod
-Environment=AWS_REGION=us-east-1
+EnvironmentFile=/etc/cropguard.env
 Environment=GEMINI_MODEL=models/gemini-2.5-flash
 Environment=DEBUG=false
 LogsDirectory=cropguard
