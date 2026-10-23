@@ -1,6 +1,6 @@
 -- ============================================================
 --  CROPGUARD AI — Andhra Pradesh Complete Database
---  Run this ENTIRELY in Supabase SQL Editor
+--  Run with psql after 01_schema.sql
 --  Safe to run multiple times
 -- ============================================================
 

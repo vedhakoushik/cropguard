@@ -1,7 +1,10 @@
-from flask import Blueprint, request, jsonify
-from services.supabase_client import get_supabase
-from services.gemini import chat_with_ai, AP_PEST_KNOWLEDGE
 import json
+import uuid
+from datetime import datetime
+
+from flask import Blueprint, request, jsonify
+from services.db import fetch_all, fetch_one, execute
+from services.gemini import chat_with_ai, AP_PEST_KNOWLEDGE
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
 
@@ -12,12 +15,33 @@ FALLBACK_CROPS = [
 ]
 
 
+def _valid_uuid(value):
+    try:
+        return str(uuid.UUID(str(value))) if value else None
+    except ValueError:
+        return None
+
+
+def _serialize(row: dict) -> dict:
+    out = {}
+    for k, v in row.items():
+        if isinstance(v, uuid.UUID):
+            v = str(v)
+        elif isinstance(v, datetime):
+            v = v.isoformat()
+        out[k] = v
+    return out
+
+
 @chat_bp.route("/sessions", methods=["GET"])
 def get_sessions():
     try:
-        sb  = get_supabase()
-        res = sb.table("chat_sessions").select("*, crops(name)").order("started_at", desc=True).limit(20).execute()
-        return jsonify(res.data or []), 200
+        rows = fetch_all(
+            "SELECT s.*, CASE WHEN c.id IS NULL THEN NULL ELSE json_build_object('name', c.name) END AS crops "
+            "FROM chat_sessions s LEFT JOIN crops c ON c.id = s.crop_id "
+            "ORDER BY s.started_at DESC LIMIT 20"
+        )
+        return jsonify([_serialize(r) for r in rows]), 200
     except Exception as e:
         print(f"[chat sessions] {e}")
         return jsonify([]), 200
@@ -29,12 +53,11 @@ def create_session():
     crop_id = data.get("crop_id")
     title   = data.get("title", "New Chat")
     try:
-        sb          = get_supabase()
-        insert_data = {"session_title": title, "is_active": True}
-        if crop_id:
-            insert_data["crop_id"] = int(crop_id)
-        res = sb.table("chat_sessions").insert(insert_data).execute()
-        return jsonify(res.data[0]), 201
+        row = fetch_one(
+            "INSERT INTO chat_sessions (session_title, is_active, crop_id) VALUES (%s, TRUE, %s) RETURNING *",
+            (title, int(crop_id) if crop_id else None),
+        )
+        return jsonify(_serialize(row)), 201
     except Exception as e:
         print(f"[create session] {e}")
         return jsonify({"id": "local-session", "session_title": title, "is_active": True}), 201
@@ -42,20 +65,26 @@ def create_session():
 
 @chat_bp.route("/sessions/<session_id>", methods=["DELETE"])
 def delete_session(session_id):
-    try:
-        sb = get_supabase()
-        sb.table("chat_sessions").delete().eq("id", session_id).execute()
-    except Exception as e:
-        print(f"[delete session] {e}")
+    sid = _valid_uuid(session_id)
+    if sid:
+        try:
+            execute("DELETE FROM chat_sessions WHERE id = %s", (sid,))
+        except Exception as e:
+            print(f"[delete session] {e}")
     return jsonify({"message": "Deleted"}), 200
 
 
 @chat_bp.route("/sessions/<session_id>/messages", methods=["GET"])
 def get_messages(session_id):
+    sid = _valid_uuid(session_id)
+    if not sid:
+        return jsonify([]), 200
     try:
-        sb  = get_supabase()
-        res = sb.table("chat_messages").select("*").eq("session_id", session_id).order("created_at").execute()
-        return jsonify(res.data or []), 200
+        rows = fetch_all(
+            "SELECT * FROM chat_messages WHERE session_id = %s ORDER BY created_at",
+            (sid,),
+        )
+        return jsonify([_serialize(r) for r in rows]), 200
     except Exception as e:
         print(f"[get messages] {e}")
         return jsonify([]), 200
@@ -63,17 +92,14 @@ def get_messages(session_id):
 
 @chat_bp.route("/sessions/<session_id>/analysis", methods=["GET"])
 def get_latest_analysis(session_id):
+    sid = _valid_uuid(session_id)
+    if not sid:
+        return jsonify({}), 200
     try:
-        sb = get_supabase()
-        res = (
-            sb.table("analysis_results")
-            .select("*")
-            .eq("session_id", session_id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
+        row = fetch_one(
+            "SELECT * FROM analysis_results WHERE session_id = %s ORDER BY created_at DESC LIMIT 1",
+            (sid,),
         )
-        row = (res.data or [None])[0]
         if not row:
             return jsonify({}), 200
 
@@ -109,16 +135,17 @@ def send_message(session_id):
     if not message:
         return jsonify({"error": "Message cannot be empty"}), 400
 
+    sid  = _valid_uuid(session_id)
     msgs = []
-    sb = None
-    try:
-        sb = get_supabase()
-        prev = sb.table("chat_messages").select("role,content")\
-                 .eq("session_id", session_id)\
-                 .order("created_at", desc=True).limit(6).execute()
-        msgs = list(reversed(prev.data or []))
-    except Exception as e:
-        print(f"[message history] {e}")
+    if sid:
+        try:
+            prev = fetch_all(
+                "SELECT role, content FROM chat_messages WHERE session_id = %s ORDER BY created_at DESC LIMIT 6",
+                (sid,),
+            )
+            msgs = list(reversed(prev))
+        except Exception as e:
+            print(f"[message history] {e}")
 
     # Mark as follow-up if session already has AI replies
     has_prior_ai = any(m["role"] == "assistant" for m in msgs)
@@ -133,23 +160,25 @@ def send_message(session_id):
             parts.append(f"{role}: {content}")
         context["history_summary"] = " | ".join(parts)
 
-    if sb:
+    if sid:
         try:
-            sb.table("chat_messages").insert({
-                "session_id": session_id, "role": "user", "content": message
-            }).execute()
+            execute(
+                "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, 'user', %s)",
+                (sid, message),
+            )
         except Exception as e:
             print(f"[save user message] {e}")
 
     ai_reply = chat_with_ai(message, context)
 
     message_id = None
-    if sb:
+    if sid:
         try:
-            res = sb.table("chat_messages").insert({
-                "session_id": session_id, "role": "assistant", "content": ai_reply
-            }).execute()
-            message_id = res.data[0]["id"]
+            row = fetch_one(
+                "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, 'assistant', %s) RETURNING id",
+                (sid, ai_reply),
+            )
+            message_id = row["id"]
         except Exception as e:
             print(f"[save ai message] {e}")
 
@@ -163,9 +192,8 @@ def send_message(session_id):
 @chat_bp.route("/crops", methods=["GET"])
 def get_crops():
     try:
-        sb  = get_supabase()
-        res = sb.table("crops").select("id, name, category, growing_season").order("name").execute()
-        return jsonify(res.data or FALLBACK_CROPS), 200
+        rows = fetch_all("SELECT id, name, category, growing_season FROM crops ORDER BY name")
+        return jsonify(rows or FALLBACK_CROPS), 200
     except Exception as e:
         print(f"[get crops] {e}")
         return jsonify(FALLBACK_CROPS), 200

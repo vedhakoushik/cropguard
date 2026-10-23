@@ -10,7 +10,7 @@
     </a>
 
     <div class="auth-card__header">
-      <div class="section-label">{% if auth_mode == "signup" %}Create Account{% else %}Welcome Back{% endif %}</div>
+      <div class="section-label">{% if auth_mode == "signup" %}Create Account{% elif auth_mode == "confirm" %}Verify Email{% else %}Welcome Back{% endif %}</div>
       <h1>{% if auth_mode == "signup" %}Sign up to save your CropGuard workspace.{% else %}Login to continue to CropGuard.{% endif %}</h1>
       <p>{% if auth_mode == "signup" %}Create an account to keep your access secured and continue using the advisory workflow.{% else %}Access your advisory workspace and continue with crop analysis and follow-up support.{% endif %}</p>
     </div>
@@ -27,13 +27,20 @@
 
       <label class="auth-field">
         <span>Email address</span>
-        <input type="email" name="email" placeholder="[email protected]" required>
+        <input type="email" name="email" placeholder="[email protected]" value="{{ email or '' }}" required>
       </label>
 
+      {% if auth_mode == "confirm" %}
+      <label class="auth-field">
+        <span>Verification code</span>
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code from your email" required>
+      </label>
+      {% else %}
       <label class="auth-field">
         <span>Password</span>
         <input type="password" name="password" placeholder="Enter your password" required>
       </label>
+      {% endif %}
 
       {% if auth_mode == "signup" %}
       <label class="auth-field">
@@ -43,7 +50,7 @@
       {% endif %}
 
       <button type="submit" class="btn-primary auth-submit">
-        {% if auth_mode == "signup" %}Create account{% else %}Login{% endif %}
+        {% if auth_mode == "signup" %}Create account{% elif auth_mode == "confirm" %}Verify email{% else %}Login{% endif %}
       </button>
     </form>
 

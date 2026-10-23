@@ -1,7 +1,8 @@
 import uuid
 import json
 from flask import Blueprint, request, jsonify
-from services.supabase_client import get_supabase
+from services.db import fetch_all, fetch_one, execute
+from services.storage import upload_image, presigned_url
 from services.gemini import analyze_crop_image, AP_DISTRICT_CROPS
 from config import Config
 
@@ -17,17 +18,26 @@ ALLOWED_MIME = {
 FALLBACK_LOCATIONS = {"Andhra Pradesh": sorted(AP_DISTRICT_CROPS.keys())}
 
 
+def _valid_uuid(value):
+    try:
+        return str(uuid.UUID(str(value))) if value else None
+    except ValueError:
+        return None
+
+
 def fetch_location_stats(state: str, district: str) -> dict:
     if not state or not district:
         return {}
     try:
-        sb  = get_supabase()
-        res = sb.table("location_crop_data") \
-                .select("crop_name,total_area_hectare,total_production,max_yield,data_records") \
-                .eq("state", state).eq("district", district).execute()
+        rows = fetch_all(
+            "SELECT crop_name, total_area_hectare::float AS total_area_hectare, "
+            "total_production::float AS total_production, max_yield::float AS max_yield, data_records "
+            "FROM location_crop_data WHERE state = %s AND district = %s",
+            (state, district),
+        )
         return {
             r["crop_name"]: {k: r[k] for k in ["total_area_hectare","total_production","max_yield","data_records"]}
-            for r in res.data
+            for r in rows
         }
     except Exception as e:
         print(f"[location_stats] {e}")
@@ -37,10 +47,9 @@ def fetch_location_stats(state: str, district: str) -> dict:
 @analysis_bp.route("/locations", methods=["GET"])
 def get_locations():
     try:
-        sb  = get_supabase()
-        res = sb.table("location_crop_data").select("state,district").order("state").execute()
+        rows = fetch_all("SELECT DISTINCT state, district FROM location_crop_data ORDER BY state, district")
         grouped = {}
-        for row in res.data:
+        for row in rows:
             s, d = row["state"], row["district"]
             if s not in grouped: grouped[s] = []
             if d not in grouped[s]: grouped[s].append(d)
@@ -78,41 +87,33 @@ def analyze():
         return jsonify({"error": f"Image too large. Max {Config.MAX_IMAGE_MB}MB"}), 400
 
     crop_id    = request.form.get("crop_id")
-    session_id = request.form.get("session_id")
+    session_id = _valid_uuid(request.form.get("session_id"))
     crop_name  = request.form.get("crop_name", "Unknown crop").strip()
     state      = request.form.get("state",    "").strip()
     district   = request.form.get("district", "").strip()
     language   = request.form.get("language", "English").strip()
     mime_type  = ALLOWED_MIME[ext]
-    sb         = None
-    try:
-        sb = get_supabase()
-    except Exception as e:
-        print(f"[supabase] {e}")
+    crop_id    = int(crop_id) if crop_id and str(crop_id).isdigit() else None
 
-    # Upload to storage (non-fatal)
+    # Upload to S3 (non-fatal)
     public_url = ""
+    s3_key     = None
     try:
-        if not sb:
-            raise RuntimeError("Supabase unavailable")
-        path = f"uploads/{uuid.uuid4()}.{ext}"
-        sb.storage.from_(Config.SUPABASE_BUCKET).upload(path, image_bytes, file_options={"content-type": mime_type})
-        public_url = sb.storage.from_(Config.SUPABASE_BUCKET).get_public_url(path)
+        key = f"uploads/{uuid.uuid4()}.{ext}"
+        upload_image(key, image_bytes, mime_type)
+        s3_key     = key
+        public_url = presigned_url(key)
     except Exception as e:
         print(f"[storage] {e}")
 
     # Save image record
     img_id = None
     try:
-        if not sb:
-            raise RuntimeError("Supabase unavailable")
-        row = sb.table("crop_images").insert({
-            "image_url":         public_url or "local",
-            "original_filename": file.filename,
-            "analysis_status":   "pending",
-            **({"session_id": session_id} if session_id else {}),
-            **({"crop_id": int(crop_id)} if crop_id else {}),
-        }).execute().data[0]
+        row = fetch_one(
+            "INSERT INTO crop_images (s3_key, original_filename, analysis_status, session_id, crop_id) "
+            "VALUES (%s, %s, 'pending', %s, %s) RETURNING id",
+            (s3_key, file.filename, session_id, crop_id),
+        )
         img_id = row["id"]
     except Exception as e:
         print(f"[db crop_images] {e}")
@@ -130,33 +131,36 @@ def analyze():
 
     if not result["success"]:
         if img_id:
-            try: sb.table("crop_images").update({"analysis_status": "failed"}).eq("id", img_id).execute()
-            except: pass
+            try: execute("UPDATE crop_images SET analysis_status = 'failed' WHERE id = %s", (img_id,))
+            except Exception as e: print(f"[db crop_images] {e}")
         return jsonify({"error": result.get("error", "Analysis failed")}), 500
 
     ai = result["data"]
 
     # Update image status
     if img_id:
-        try: sb.table("crop_images").update({"analysis_status": "processed", "ai_confidence": ai.get("confidence")}).eq("id", img_id).execute()
-        except: pass
+        try:
+            conf = ai.get("confidence")
+            execute(
+                "UPDATE crop_images SET analysis_status = 'processed', ai_confidence = %s WHERE id = %s",
+                (str(conf) if conf is not None else None, img_id),
+            )
+        except Exception as e:
+            print(f"[db crop_images] {e}")
 
     # Save analysis
     analysis_id = None
     try:
-        if not sb:
-            raise RuntimeError("Supabase unavailable")
-        analysis_id = sb.table("analysis_results").insert({
-            "session_id":             session_id,
-            "image_id":               img_id,
-            "crop_id":                int(crop_id) if crop_id else None,
-            "pest_name_detected":     ai.get("pest_detected"),
-            "cause_summary":          ai.get("causes"),
-            "solution_summary":       ai.get("organic_alternative"),
-            "severity":               ai.get("severity"),
-            "recommended_pesticides": json.dumps(ai.get("pesticides", [])),
-            "additional_tips":        ai.get("prevention_tips"),
-        }).execute().data[0]["id"]
+        analysis_id = fetch_one(
+            "INSERT INTO analysis_results (session_id, image_id, crop_id, pest_name_detected, cause_summary, "
+            "solution_summary, severity, recommended_pesticides, additional_tips) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s) RETURNING id",
+            (
+                session_id, img_id, crop_id,
+                ai.get("pest_detected"), ai.get("causes"), ai.get("organic_alternative"),
+                ai.get("severity"), json.dumps(ai.get("pesticides", [])), ai.get("prevention_tips"),
+            ),
+        )["id"]
     except Exception as e:
         print(f"[db analysis_results] {e}")
 
@@ -165,16 +169,17 @@ def analyze():
         try:
             loc_line  = f"\n📍 {location_str}" if location_str else ""
             pest_list = "\n".join(f"• {p.get('brand', p['name'])} — {p.get('dosage', '')}" for p in ai.get("pesticides", [])[:3])
-            sb.table("chat_messages").insert({
-                "session_id": session_id, "role": "assistant",
-                "content": (
-                    f"🔍 {ai.get('pest_detected','Unknown')} detected{loc_line}\n"
-                    f"⚠️ Severity: {(ai.get('severity') or '').upper()}\n\n"
-                    f"Cause: {ai.get('causes','—')}\n\n"
-                    f"Treatment:\n{pest_list or '• No pesticide needed'}\n\n"
-                    f"Prevention: {ai.get('prevention_tips','—')}"
-                ),
-            }).execute()
+            content = (
+                f"🔍 {ai.get('pest_detected','Unknown')} detected{loc_line}\n"
+                f"⚠️ Severity: {(ai.get('severity') or '').upper()}\n\n"
+                f"Cause: {ai.get('causes','—')}\n\n"
+                f"Treatment:\n{pest_list or '• No pesticide needed'}\n\n"
+                f"Prevention: {ai.get('prevention_tips','—')}"
+            )
+            execute(
+                "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, 'assistant', %s)",
+                (session_id, content),
+            )
         except Exception as e:
             print(f"[db chat_messages] {e}")
 

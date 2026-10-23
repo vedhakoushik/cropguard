@@ -1,5 +1,5 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
-from services.auth_service import sign_in_user, sign_out_user, sign_up_user
+from services.auth_service import confirm_user, sign_in_user, sign_out_user, sign_up_user
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -79,8 +79,8 @@ def signup():
                 flash("Account created successfully.", "success")
                 return redirect(_next_url())
 
-            flash("Account created. Check your email to confirm your account before logging in.", "success")
-            return redirect(url_for("auth.login"))
+            flash("Account created. Enter the verification code sent to your email.", "success")
+            return redirect(url_for("auth.confirm", email=email, next=_next_url()))
         except Exception as exc:
             flash(f"Signup failed: {exc}", "error")
             return render_template("auth.html", auth_mode="signup", next_url=_next_url()), 400
@@ -88,10 +88,30 @@ def signup():
     return render_template("auth.html", auth_mode="signup", next_url=_next_url())
 
 
+@auth_bp.route("/confirm", methods=["GET", "POST"])
+def confirm():
+    email = (request.values.get("email") or "").strip().lower()
+
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+        if not email or not code:
+            flash("Enter your email and the verification code.", "error")
+            return render_template("auth.html", auth_mode="confirm", email=email, next_url=_next_url()), 400
+        try:
+            confirm_user(email, code)
+            flash("Email verified. You can now log in.", "success")
+            return redirect(url_for("auth.login", next=_next_url()))
+        except Exception as exc:
+            flash(f"Verification failed: {exc}", "error")
+            return render_template("auth.html", auth_mode="confirm", email=email, next_url=_next_url()), 400
+
+    return render_template("auth.html", auth_mode="confirm", email=email, next_url=_next_url())
+
+
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     try:
-        sign_out_user()
+        sign_out_user(session.get("access_token", ""))
     except Exception:
         pass
     session.clear()
