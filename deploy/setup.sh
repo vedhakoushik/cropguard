@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installs or updates CropGuard on Amazon Linux 2023. Safe to re-run.
 set -euo pipefail
+export HOME=${HOME:-/root}
 
 REPO=https://github.com/vedhakoushik/cropguard.git
 BRANCH=${BRANCH:-aws-migration}
