@@ -5,8 +5,8 @@ import google.generativeai as genai
 from config import Config
 
 genai.configure(api_key=Config.GEMINI_API_KEY)
-MODEL_NAME = os.getenv("GEMINI_MODEL", "models/gemini-1.5-flash")
-REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "8"))
+MODEL_NAME = os.getenv("GEMINI_MODEL", "models/gemini-2.5-flash")
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
 model = genai.GenerativeModel(MODEL_NAME)
 
 

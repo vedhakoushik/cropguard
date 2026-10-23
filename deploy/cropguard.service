@@ -1,0 +1,23 @@
+[Unit]
+Description=CropGuard Flask app (gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cropguard
+Group=cropguard
+WorkingDirectory=/opt/cropguard/backend
+Environment=SECRET_ID=cropguard/prod
+Environment=AWS_REGION=us-east-1
+Environment=GEMINI_MODEL=models/gemini-2.5-flash
+Environment=DEBUG=false
+LogsDirectory=cropguard
+ExecStart=/opt/cropguard/.venv/bin/gunicorn app:app \
+    --workers 3 --bind 127.0.0.1:8000 --timeout 90 \
+    --access-logfile /var/log/cropguard/access.log \
+    --error-logfile /var/log/cropguard/app.log --capture-output
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
