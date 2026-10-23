@@ -30,6 +30,8 @@ python3.11 -m venv "$APP_DIR/.venv"
 chown -R cropguard:cropguard "$APP_DIR"
 
 cp "$APP_DIR/deploy/cropguard.service" /etc/systemd/system/cropguard.service
+# Amazon Linux ships a default port-80 server in nginx.conf; make ours the default instead.
+sed -i "s/ default_server//" /etc/nginx/nginx.conf
 cp "$APP_DIR/deploy/nginx-cropguard.conf" /etc/nginx/conf.d/cropguard.conf
 nginx -t
 
