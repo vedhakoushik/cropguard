@@ -1,7 +1,6 @@
 const $ = id => document.getElementById(id);
-const el = t => document.createElement(t);
 
-let state = {
+const state = {
   sessionId: null,
   cropId: null,
   cropName: "",
@@ -12,47 +11,41 @@ let state = {
   lastAnalysis: null,
   locationData: {},
   allCrops: [],
+  sending: false,
 };
 
 const LOCAL_ANALYSIS_KEY = "cg_session_analysis";
+const MOBILE = window.matchMedia("(max-width: 860px)");
+const t = key => getTranslation(state.language || "English", key);
 
-function getSuggestions(type) {
-  const trans = key => getTranslation(state.language || "English", key);
-  const suggestionMap = {
-    default: [
-      trans("howMuchToSpray"),
-      trans("spreadToOtherCrops"),
-      trans("organicAlternative"),
-      trans("bestTimeToApply")
-    ],
-    insect: [
-      trans("naturalPredators"),
-      trans("harvestSafe"),
-      trans("preventionNextSeason"),
-      trans("dosagePerAcre")
-    ],
-    fungus: [
-      trans("rainWorsening"),
-      trans("sellCrop"),
-      trans("disposePlants"),
-      trans("sprayTime")
-    ],
-    virus: [
-      trans("removeInfected"),
-      trans("spreadByTouch"),
-      trans("protectHealthy"),
-      trans("isThereCure")
-    ]
-  };
-  return suggestionMap[type] || suggestionMap.default;
+const ICONS = {
+  leaf: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>',
+  camera: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+  spot: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>',
+  trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
+};
+
+/* ---------- Safe rendering ---------- */
+
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[ch]);
 }
 
-const SUGGESTIONS = {
-  default: ["How much to spray per acre?", "Can it spread to other crops?", "Organic alternative?", "Best time to apply?"],
-  insect: ["Natural predators available?", "Is harvest safe?", "Next season prevention?", "Dosage for 1 acre?"],
-  fungus: ["Will rain make it worse?", "Can I still sell the crop?", "How to dispose affected plants?", "Best spray time?"],
-  virus: ["Remove infected plants?", "Can it spread by touch?", "Protect healthy plants?", "Is there a cure?"],
-};
+marked.setOptions({ gfm: true, breaks: true });
+DOMPurify.addHook("afterSanitizeAttributes", node => {
+  if (node.tagName === "A") {
+    node.setAttribute("target", "_blank");
+    node.setAttribute("rel", "noopener noreferrer");
+  }
+});
+
+function md(text) {
+  return DOMPurify.sanitize(marked.parse(String(text ?? "")));
+}
+
+/* ---------- Boot ---------- */
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!state.language) {
@@ -61,9 +54,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     applyLang(state.language, false);
   }
-  await Promise.all([loadCrops(), loadLocations(), loadSessions()]);
   bindEvents();
-  syncPanelLayout();
+  await Promise.all([loadCrops(), loadLocations(), loadSessions()]);
+  updateSendState();
 });
 
 function showLangModal() { $("langOverlay").style.display = "flex"; }
@@ -72,103 +65,71 @@ function hideLangModal() { $("langOverlay").style.display = "none"; }
 function applyLang(lang, hide = true) {
   state.language = lang;
   localStorage.setItem("cg_lang", lang);
-  const lbl = $("langLabel");
-  if (lbl) lbl.textContent = lang;
   applyTranslations(lang);
+  $("langLabel").textContent = lang;
   if (hide) hideLangModal();
-  // Refresh welcome message if no session active
-  if (!state.sessionId) {
-    showWelcome();
-  }
+  if (!state.sessionId) showWelcome();
+  updateTopbarCtx();
 }
 
-document.querySelectorAll(".lang-btn").forEach(button => {
-  button.addEventListener("click", () => applyLang(button.dataset.lang));
-});
-
-$("changeLangBtn").addEventListener("click", showLangModal);
-
-function showProductPopup(product) {
-  const query = encodeURIComponent((product.brand || product.name) + " pesticide");
-  $("productContent").innerHTML = `
-    <div class="prod-header">
-      <span class="prod-icon">PR</span>
-      <div>
-        <h3>${product.name}</h3>
-        ${product.brand ? `<p class="prod-brand">${product.brand}</p>` : ""}
-      </div>
-    </div>
-    <div class="prod-info">
-      <div class="prod-row"><span>Dosage</span><strong>${product.dosage || "-"}</strong></div>
-      <div class="prod-row"><span>Apply</span><strong>${product.application || "Foliar spray"}</strong></div>
-      <div class="prod-row"><span>Safe after</span><strong>${product.safety_days || 14} days</strong></div>
-    </div>
-    <p class="prod-avail">Available at local AP agri shops and KVK centers</p>
-    <div class="prod-links">
-      <a href="https://www.amazon.in/s?k=${query}" target="_blank" class="prod-link">Amazon</a>
-      <a href="https://www.flipkart.com/search?q=${query}" target="_blank" class="prod-link">Flipkart</a>
-      <a href="https://agribegri.com/?s=${encodeURIComponent(product.brand || product.name)}" target="_blank" class="prod-link prod-agri">AgriShop</a>
-      <a href="https://krishiseva.com/search?q=${encodeURIComponent(product.brand || product.name)}" target="_blank" class="prod-link prod-agri">KrishiSeva</a>
-    </div>`;
-  $("productOverlay").style.display = "flex";
-}
-
-$("closeProduct").addEventListener("click", () => $("productOverlay").style.display = "none");
-$("productOverlay").addEventListener("click", event => {
-  if (event.target === $("productOverlay")) $("productOverlay").style.display = "none";
-});
-
-window.showProductPopup = showProductPopup;
+/* ---------- Events ---------- */
 
 function bindEvents() {
+  document.querySelectorAll("#langOverlay [data-lang]").forEach(button => {
+    button.addEventListener("click", () => applyLang(button.dataset.lang));
+  });
+  $("changeLangBtn").addEventListener("click", showLangModal);
+
+  $("closeProduct").addEventListener("click", closeProduct);
+  $("productOverlay").addEventListener("click", event => {
+    if (event.target === $("productOverlay")) closeProduct();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      closeProduct();
+      closeDrawer();
+    }
+  });
+
   $("newChatBtn").addEventListener("click", handleNewChat);
   $("clearAllBtn").addEventListener("click", handleClearAll);
-  $("sendBtn").addEventListener("click", handleSend);
+  $("composer").addEventListener("submit", event => {
+    event.preventDefault();
+    handleSend();
+  });
   $("imgUpload").addEventListener("change", handleImgSelect);
   $("removeImg").addEventListener("click", clearImg);
-  $("closePanel").addEventListener("click", () => {
-    $("analysisPanel").style.display = "none";
-    syncPanelLayout();
-  });
+  $("closePanel").addEventListener("click", () => setPanelVisible(false));
+  $("panelOpenBtn").addEventListener("click", () => setPanelVisible(true));
   $("panelShareBtn").addEventListener("click", shareWhatsApp);
 
   $("sidebarToggle").addEventListener("click", () => {
-    const sidebar = $("sidebar");
-    const app = $("appContainer");
-    const isCollapsed = sidebar.classList.contains("collapsed");
-    if (isCollapsed) {
-      sidebar.classList.remove("collapsed");
-      app.classList.remove("app--sidebar-collapsed");
-      $("sidebarToggle").textContent = "<";
-      $("sidebarOpen").style.display = "none";
-    } else {
-      sidebar.classList.add("collapsed");
-      app.classList.add("app--sidebar-collapsed");
-      $("sidebarToggle").textContent = ">";
-      $("sidebarOpen").style.display = "flex";
-    }
-    // Trigger resize recalculation
-    setTimeout(() => syncPanelLayout(), 100);
-    window.dispatchEvent(new Event('resize'));
+    if (MOBILE.matches) closeDrawer();
+    else $("appContainer").classList.add("cg-app--collapsed");
   });
-
   $("sidebarOpen").addEventListener("click", () => {
-    const sidebar = $("sidebar");
-    const app = $("appContainer");
-    sidebar.classList.remove("collapsed");
-    app.classList.remove("app--sidebar-collapsed");
-    $("sidebarToggle").textContent = "<";
-    $("sidebarOpen").style.display = "none";
-    // Trigger resize recalculation
-    setTimeout(() => syncPanelLayout(), 100);
-    window.dispatchEvent(new Event('resize'));
+    if (MOBILE.matches) $("appContainer").classList.add("cg-app--drawer");
+    else $("appContainer").classList.remove("cg-app--collapsed");
+  });
+  $("sidebarScrim").addEventListener("click", closeDrawer);
+
+  const input = $("msgInput");
+  input.addEventListener("input", () => {
+    autosize();
+    updateSendState();
+  });
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      handleSend();
+    }
   });
 
   $("cropSelect").addEventListener("change", event => {
     const option = event.target.options[event.target.selectedIndex];
     state.cropId = event.target.value || null;
     state.cropName = state.cropId ? option.text : "";
-    $("cropPill").classList.toggle("topbar-pill--set", !!state.cropId);
+    $("cropPill").classList.toggle("cg-select--set", !!state.cropId);
     updateTopbarCtx();
   });
 
@@ -176,45 +137,65 @@ function bindEvents() {
     state.selState = event.target.value;
     state.district = "";
     const districtSelect = $("districtSelect");
-    districtSelect.innerHTML = '<option value="">District</option>';
-    districtSelect.disabled = true;
-
-    if (state.selState && state.locationData[state.selState]) {
-      state.locationData[state.selState].forEach(district => {
-        const option = el("option");
-        option.value = district;
-        option.textContent = district;
-        districtSelect.appendChild(option);
-      });
-      districtSelect.disabled = false;
-    }
-
+    districtSelect.replaceChildren(new Option(t("districtPlaceholder") || "District", ""));
+    (state.locationData[state.selState] || []).forEach(d => districtSelect.add(new Option(d, d)));
+    districtSelect.disabled = !state.locationData[state.selState];
     $("locationHint").style.display = "none";
-    $("locationPill").classList.remove("topbar-pill--set");
+    $("locationPill").classList.remove("cg-select--set");
     updateTopbarCtx();
   });
 
   $("districtSelect").addEventListener("change", async event => {
     state.district = event.target.value;
-    $("locationPill").classList.toggle("topbar-pill--set", !!state.district);
+    $("locationPill").classList.toggle("cg-select--set", !!state.district);
     updateTopbarCtx();
     if (state.district) await showLocationHint();
   });
 
-  $("msgInput").addEventListener("keydown", event => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      handleSend();
-    }
+  // Delegated actions for rendered content (no inline handlers).
+  document.addEventListener("click", event => {
+    const target = event.target.closest("[data-action]");
+    if (!target) return;
+    const { action } = target.dataset;
+    if (action === "fill") fillMsg(target.dataset.text);
+    else if (action === "upload") $("imgUpload").click();
+    else if (action === "product") showProductPopup(state.lastAnalysis?.pesticides?.[Number(target.dataset.index)]);
+    else if (action === "dashboard") setPanelVisible(true);
+    else if (action === "share") shareWhatsApp();
+    else if (action === "open-session") openSession(target.dataset.id);
+    else if (action === "delete-session") deleteSession(target.dataset.id);
   });
+
+  MOBILE.addEventListener("change", closeDrawer);
+}
+
+function closeDrawer() {
+  $("appContainer").classList.remove("cg-app--drawer");
+}
+
+function autosize() {
+  const input = $("msgInput");
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 200)}px`;
+}
+
+function updateSendState() {
+  const hasContent = $("msgInput").value.trim() || state.imageFile;
+  $("sendBtn").disabled = state.sending || !hasContent;
+}
+
+function fillMsg(text) {
+  const input = $("msgInput");
+  input.value = text;
+  autosize();
+  updateSendState();
+  input.focus();
 }
 
 function updateTopbarCtx() {
-  const parts = [];
-  if (state.cropName) parts.push(state.cropName);
-  if (state.district) parts.push(`${state.district}, AP`);
-  const ctx = $("topbarCtx");
-  if (ctx) ctx.textContent = parts.join(" / ") || "Select crop and district";
+  const where = state.district ? `${state.district}, ${state.selState}` : "";
+  const text = state.cropName && where ? `${state.cropName} in ${where}` : state.cropName || where;
+  $("topbarCtx").textContent = text || t("selectCropAndDistrict") || "Select crop and district";
 }
 
 async function showLocationHint() {
@@ -226,117 +207,128 @@ async function showLocationHint() {
   }
   const top = Object.entries(data)
     .sort((a, b) => b[1].total_area_hectare - a[1].total_area_hectare)
-    .slice(0, 4);
-  const crops = top
-    .map(([crop, stats]) => `<strong>${crop}</strong> ${Math.round(stats.total_area_hectare).toLocaleString()} ha`)
-    .join(" / ");
-  $("locationHintText").innerHTML = `${state.district}: ${crops}`;
+    .slice(0, 4)
+    .map(([crop, stats]) => `<strong>${esc(crop)}</strong> ${Math.round(stats.total_area_hectare).toLocaleString()} ha`)
+    .join(", ");
+  $("locationHintText").innerHTML = `Main crops in ${esc(state.district)}: ${top}`;
   $("locationHint").style.display = "flex";
 }
 
+/* ---------- Thread ---------- */
+
+function scrollToBottom() {
+  const scroller = $("messagesScroll");
+  scroller.scrollTop = scroller.scrollHeight;
+}
+
 function showWelcome() {
-  $("messages").innerHTML = "";
-  const trans = key => getTranslation(state.language || "English", key);
-  addMsg("ai", `${trans("welcomeMsg")}
-<div class="quick-actions">
-  <button onclick="document.getElementById('imgUpload').click()" class="qa-btn">${trans("uploadPhotoBtnText")}</button>
-  <button onclick="fillMsg('My crop leaves are turning yellow')" class="qa-btn">${trans("yellowLeavesBtnText")}</button>
-  <button onclick="fillMsg('I see holes in the fruit')" class="qa-btn">${trans("fruitDamageBtnText")}</button>
-  <button onclick="fillMsg('White powder on leaves')" class="qa-btn">${trans("powderyGrowthBtnText")}</button>
-  <button onclick="fillMsg('Brown spots spreading on leaves')" class="qa-btn">${trans("brownSpotsBtnText")}</button>
-</div>`);
+  const starters = [
+    { action: "upload", icon: ICONS.camera, label: t("uploadPhotoBtnText") },
+    { action: "fill", icon: ICONS.leaf, label: t("yellowLeavesBtnText") },
+    { action: "fill", icon: ICONS.spot, label: t("brownSpotsBtnText") },
+    { action: "fill", icon: ICONS.spot, label: t("powderyGrowthBtnText") },
+    { action: "fill", icon: ICONS.leaf, label: t("fruitDamageBtnText") },
+  ];
+  $("messages").innerHTML = `
+    <section class="cg-welcome">
+      <h1>${esc(t("welcomeTitle"))}</h1>
+      <div class="cg-welcome__sub">${md(t("welcomeMsg"))}</div>
+      <div class="cg-starters">
+        ${starters.map(s => `
+          <button type="button" class="cg-starter" data-action="${s.action}" data-text="${esc(s.label)}">
+            ${s.icon}<span>${esc(s.label)}</span>
+          </button>`).join("")}
+      </div>
+    </section>`;
 }
 
-async function handleNewChat() {
-  state.sessionId = null;
-  state.lastAnalysis = null;
-  clearImg();
-  $("messages").innerHTML = "";
-  $("analysisPanel").style.display = "none";
-  syncPanelLayout();
-  $("suggestionsBar").style.display = "none";
-  $("riskBadge").style.display = "none";
-  showWelcome();
-  await createSession();
-  loadSessions();
+function clearWelcome() {
+  const welcome = $("messages").querySelector(".cg-welcome");
+  if (welcome) welcome.remove();
 }
 
-async function deleteSession(id, event) {
-  event.stopPropagation();
-  const trans = key => getTranslation(state.language || "English", key);
-  if (!confirm(trans("deleteConfirm"))) return;
-  await api(`/api/chat/sessions/${id}`, { method: "DELETE" });
-  if (state.sessionId === id) {
-    state.sessionId = null;
-    state.lastAnalysis = null;
-    $("messages").innerHTML = "";
-    $("analysisPanel").style.display = "none";
-    syncPanelLayout();
-    $("suggestionsBar").style.display = "none";
-    $("riskBadge").style.display = "none";
-    showWelcome();
+function addUserMsg(text, imgUrl = null) {
+  clearWelcome();
+  const div = document.createElement("div");
+  div.className = "cg-msg cg-msg--user";
+  if (imgUrl) {
+    const img = document.createElement("img");
+    img.className = "cg-msg__img";
+    img.src = imgUrl;
+    img.alt = "Uploaded crop photo";
+    div.appendChild(img);
   }
-  loadSessions();
-}
-
-window.deleteSession = deleteSession;
-
-async function handleClearAll() {
-  const trans = key => getTranslation(state.language || "English", key);
-  if (!confirm(trans("deleteAllConfirm"))) return;
-  const sessions = await api("/api/chat/sessions");
-  if (sessions?.length) {
-    await Promise.all(sessions.map(session => api(`/api/chat/sessions/${session.id}`, { method: "DELETE" })));
+  if (text) {
+    const bubble = document.createElement("div");
+    bubble.className = "cg-bubble";
+    bubble.textContent = text;
+    div.appendChild(bubble);
   }
-  state.sessionId = null;
-  state.lastAnalysis = null;
-  $("messages").innerHTML = "";
-  $("analysisPanel").style.display = "none";
-  syncPanelLayout();
-  $("suggestionsBar").style.display = "none";
-  $("riskBadge").style.display = "none";
-  showWelcome();
-  loadSessions();
+  $("messages").appendChild(div);
+  scrollToBottom();
+  return div;
 }
+
+function addAiMsg(html) {
+  clearWelcome();
+  const div = document.createElement("div");
+  div.className = "cg-msg cg-msg--ai";
+  div.innerHTML = `<div class="cg-msg__mark" aria-hidden="true">${ICONS.leaf}</div><div class="cg-msg__body">${html}</div>`;
+  $("messages").appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function addAiText(text) {
+  return addAiMsg(`<div class="cg-md">${md(text)}</div>`);
+}
+
+function addTyping() {
+  return addAiMsg('<div class="cg-typing" aria-label="CropGuard is thinking"><span></span><span></span><span></span></div>');
+}
+
+/* ---------- Sending ---------- */
 
 async function handleSend() {
   const text = $("msgInput").value.trim();
-  if (!text && !state.imageFile) return;
+  if (state.sending || (!text && !state.imageFile)) return;
+  state.sending = true;
   $("msgInput").value = "";
-  $("sendBtn").disabled = true;
+  autosize();
+  updateSendState();
   $("suggestionsBar").style.display = "none";
-  if (!state.sessionId) await createSession();
-  if (state.imageFile) await sendImage(text);
-  else await sendText(text);
-  $("sendBtn").disabled = false;
+  try {
+    if (!state.sessionId) await createSession();
+    if (state.imageFile) await sendImage(text);
+    else await sendText(text);
+  } finally {
+    state.sending = false;
+    updateSendState();
+    $("msgInput").focus();
+  }
 }
 
 async function sendText(text) {
-  addMsg("user", text);
-  const trans = key => getTranslation(state.language || "English", key);
+  addUserMsg(text);
   const typing = addTyping();
-  const res = await api(`/api/chat/sessions/${state.sessionId}/messages`, {
+  const res = await api(`/api/chat/sessions/${encodeURIComponent(state.sessionId)}/messages`, {
     method: "POST",
     body: JSON.stringify({ message: text, context: buildCtx() }),
   });
   typing.remove();
-  addMsg("ai", res?.ai_reply || trans("somethingWrong"));
-  if (state.lastAnalysis) {
-    renderPanel(state.lastAnalysis);
-  }
-  showSuggestions();
+  addAiText(res?.ai_reply || t("somethingWrong"));
+  showSuggestions(state.lastAnalysis?.pest_type);
 }
 
 async function sendImage(caption) {
   const file = state.imageFile;
-  const trans = key => getTranslation(state.language || "English", key);
-  addMsg("user", caption || trans("analyzeImageBtnText"), URL.createObjectURL(file));
+  addUserMsg(caption, URL.createObjectURL(file));
   clearImg();
   const typing = addTyping();
   const form = new FormData();
   form.append("image", file);
   form.append("crop_name", state.cropName || "Unknown");
-  form.append("session_id", state.sessionId);
+  form.append("session_id", state.sessionId || "");
   form.append("state", state.selState);
   form.append("district", state.district);
   form.append("language", state.language || "English");
@@ -352,7 +344,7 @@ async function sendImage(caption) {
     updateRiskBadge(res.result.severity);
     showSuggestions(res.result.pest_type);
   } else {
-    addMsg("ai", trans("notAnalyzedMsg"));
+    addAiText(t("notAnalyzedMsg"));
   }
 }
 
@@ -366,217 +358,110 @@ function buildCtx() {
   };
 }
 
+function getSuggestions(type) {
+  const map = {
+    default: ["howMuchToSpray", "spreadToOtherCrops", "organicAlternative", "bestTimeToApply"],
+    insect: ["naturalPredators", "harvestSafe", "preventionNextSeason", "dosagePerAcre"],
+    fungus: ["rainWorsening", "sellCrop", "disposePlants", "sprayTime"],
+    virus: ["removeInfected", "spreadByTouch", "protectHealthy", "isThereCure"],
+  };
+  return (map[type] || map.default).map(t);
+}
+
 function showSuggestions(type) {
-  const list = getSuggestions(type);
-  $("suggestionChips").innerHTML = list
-    .map(suggestion => `<button class="sug-chip" onclick="fillMsg('${suggestion}')">${suggestion}</button>`)
+  $("suggestionChips").innerHTML = getSuggestions(type)
+    .map(s => `<button type="button" class="cg-chip" data-action="fill" data-text="${esc(s)}">${esc(s)}</button>`)
     .join("");
-  $("suggestionsBar").style.display = "flex";
+  $("suggestionsBar").style.display = "block";
 }
 
-function fillMsg(text) {
-  $("msgInput").value = text;
-  $("msgInput").focus();
-}
+/* ---------- Analysis rendering ---------- */
 
-window.fillMsg = fillMsg;
+const SEVERITIES = ["low", "moderate", "high", "critical"];
+const sevOf = result => (SEVERITIES.includes(result?.severity?.toLowerCase()) ? result.severity.toLowerCase() : "low");
 
-function addMsg(role, text, imgUrl = null) {
-  const wrap = $("messages");
-  const div = el("div");
-  div.className = `msg msg--${role === "user" ? "user" : "ai"}`;
-
-  const av = el("div");
-  av.className = "msg__av";
-  av.innerHTML = role === "user"
-    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : "AI";
-
-  const body = el("div");
-  body.className = "msg__body";
-
-  if (imgUrl) {
-    const img = el("img");
-    img.className = "msg__img";
-    img.src = imgUrl;
-    body.appendChild(img);
-  }
-
-  const content = el("div");
-  content.innerHTML = fmt(text);
-  body.appendChild(content);
-
-  div.appendChild(av);
-  div.appendChild(body);
-  wrap.appendChild(div);
-  wrap.scrollTop = wrap.scrollHeight;
-  return div;
-}
-
-function addTyping() {
-  const wrap = $("messages");
-  const div = el("div");
-  div.className = "msg msg--ai";
-  div.innerHTML = `<div class="msg__av">AI</div><div class="msg__body typing-dots"><span></span><span></span><span></span></div>`;
-  wrap.appendChild(div);
-  wrap.scrollTop = wrap.scrollHeight;
-  return div;
+function doseList(result) {
+  const items = (result.pesticides || []).map((p, i) => `
+    <button type="button" class="cg-dose__item" data-action="product" data-index="${i}">
+      <span><strong>${esc(p.brand || p.name)}</strong></span>
+      <span>${esc(p.dosage || "")}</span>
+    </button>`).join("");
+  return items ? `<div class="cg-dose">${items}</div>` : `<span class="cg-muted">No pesticide needed</span>`;
 }
 
 function renderAnalysisMsg(result) {
-  const pests = (result.pesticides || []).slice(0, 3).map(product =>
-    `<button class="pesticide-pill" onclick='showProductPopup(${JSON.stringify(product).replace(/'/g, "&#39;")})'>
-      <strong>${product.brand || product.name}</strong> - ${product.dosage}
-    </button>`
-  ).join("") || `<span class="no-pest">No pesticide needed</span>`;
+  const sev = sevOf(result);
+  const rows = [
+    ["Cause", result.causes],
+    ["Location", result.location_insight],
+    ["Organic", result.organic_alternative],
+    ["Urgency", result.urgency],
+  ].filter(([, v]) => v)
+    .map(([k, v]) => `<div class="cg-diag__row"><dt>${k}</dt><dd>${esc(v)}</dd></div>`)
+    .join("");
 
-  addMsg("ai", `
-    <div class="result-stream">
-      <div class="result-stream__header">
-        <span class="result-stream__kicker">Analysis summary</span>
-        <span class="conf-pill">${result.confidence || "?"}% match</span>
-      </div>
-      <div class="result-stream__title">
-        <span class="pest-icon">${getPestIcon(result.pest_type)}</span>
+  addAiMsg(`
+    <article class="cg-diag cg-diag--${sev}">
+      <div class="cg-diag__strip"></div>
+      <header class="cg-diag__head">
         <div>
-          <strong>${result.pest_detected || "Unknown"}</strong>
-          <small>${result.scientific_name || ""}</small>
+          <h3 class="cg-diag__name">${esc(result.pest_detected || "Unknown")}</h3>
+          ${result.scientific_name ? `<span class="cg-diag__sci">${esc(result.scientific_name)}</span>` : ""}
         </div>
+        <div class="cg-diag__meta">
+          <strong class="cg-sev--${sev}">${esc(sev[0].toUpperCase() + sev.slice(1))}</strong>
+          ${result.confidence ? `${esc(result.confidence)}% match` : ""}
+        </div>
+      </header>
+      <dl class="cg-diag__rows">
+        ${rows}
+        <div class="cg-diag__row"><dt>Treatment</dt><dd>${doseList(result)}</dd></div>
+      </dl>
+      <div class="cg-diag__actions">
+        <button type="button" class="cg-btn cg-btn--primary" data-action="dashboard">Open dashboard</button>
+        <button type="button" class="cg-btn" data-action="share">Share on WhatsApp</button>
       </div>
-      <div class="result-line">
-        <span class="result-line__label">Cause</span>
-        <span class="result-line__value">${result.causes || "-"}</span>
-      </div>
-      ${result.location_insight ? `
-      <div class="result-line">
-        <span class="result-line__label">Location</span>
-        <span class="result-line__value">${result.location_insight}</span>
-      </div>` : ""}
-      <div class="result-line">
-        <span class="result-line__label">Treatment</span>
-        <div class="result-line__stack">${pests}</div>
-      </div>
-      ${result.organic_alternative ? `
-      <div class="result-line">
-        <span class="result-line__label">Organic</span>
-        <span class="result-line__value">${result.organic_alternative}</span>
-      </div>` : ""}
-      ${result.urgency ? `
-      <div class="result-line">
-        <span class="result-line__label">Urgency</span>
-        <span class="result-line__value">${result.urgency}</span>
-      </div>` : ""}
-      <div class="result-stream__actions">
-        <button class="r-detail-btn" onclick="document.getElementById('analysisPanel').style.display='flex'">Open dashboard</button>
-        <button class="r-share-btn" onclick="shareWhatsApp()">Share</button>
-      </div>
-    </div>`);
-}
-
-function getPestIcon(type) {
-  return {
-    insect: "IN",
-    fungus: "FG",
-    bacteria: "BC",
-    virus: "VR",
-    nematode: "NM",
-    none: "OK",
-  }[type] || "AI";
+    </article>`);
 }
 
 function renderPanel(result) {
-  const sevClass = result.severity?.toLowerCase() || "low";
-  const pests = (result.pesticides || []).map(product => `
-    <button class="panel-pest" onclick='showProductPopup(${JSON.stringify(product).replace(/'/g, "&#39;")})'>
-      <span class="panel-pest__name">${product.brand || product.name}</span>
-      <span class="panel-pest__meta">${product.dosage} / Wait ${product.safety_days || 14} days</span>
-    </button>`).join("") || "<p class='panel-inline-note'>No pesticide needed</p>";
-
-  const prevention = (result.prevention_tips || "")
+  const sev = sevOf(result);
+  const tips = String(result.prevention_tips || "")
     .split(/\n|•/)
-    .filter(Boolean)
-    .map(text => `<li>${text.trim()}</li>`)
-    .join("") || "<li>General crop hygiene</li>";
+    .map(s => s.replace(/^[-*\s]+/, "").trim())
+    .filter(Boolean);
+  const section = (title, body) => body ? `<section class="cg-panel__section"><h3>${title}</h3>${body}</section>` : "";
+  const para = v => v ? `<p>${esc(v)}</p>` : "";
 
   $("panelContent").innerHTML = `
-    <div class="panel-sheet">
-      <div class="panel-sheet__hero">
-        <div>
-          <div class="panel-sheet__kicker">Analysis dashboard</div>
-          <div class="panel-sheet__title">${result.pest_detected || "Unknown"} ${result.scientific_name ? `<em>${result.scientific_name}</em>` : ""}</div>
-        </div>
-        <div class="panel-sheet__score">${result.confidence || "?"}%</div>
+    <div class="cg-panel__hero">
+      <div>
+        <h3 class="cg-diag__name">${esc(result.pest_detected || "Unknown")}</h3>
+        ${result.scientific_name ? `<span class="cg-diag__sci">${esc(result.scientific_name)}</span>` : ""}
       </div>
+    </div>
+    <dl class="cg-facts">
+      <div><dt>Severity</dt><dd class="cg-sev--${sev}">${esc(sev[0].toUpperCase() + sev.slice(1))}</dd></div>
+      <div><dt>Match</dt><dd>${result.confidence ? `${esc(result.confidence)}%` : "–"}</dd></div>
+      <div><dt>Spread</dt><dd>${sev === "high" || sev === "critical" ? "Active" : "Contained"}</dd></div>
+      <div><dt>Type</dt><dd>${esc(result.pest_type || "–")}</dd></div>
+    </dl>
+    ${section("Cause", para(result.causes))}
+    ${section("Location insight", para(result.location_insight))}
+    ${section("Nearby risk", para(result.nearby_risk))}
+    ${section("Treatment", doseList(result))}
+    ${section("Organic option", para(result.organic_alternative))}
+    ${section("Urgency", para(result.urgency))}
+    ${section("Prevention", tips.length ? `<ul class="cg-tips">${tips.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "")}
+    ${section("Government support", para(result.government_support))}`;
 
-      <div class="panel-divider"></div>
+  setPanelVisible(true);
+}
 
-      <div class="panel-line">
-        <span class="panel-line__label">Severity</span>
-        <span class="panel-line__value sev-${sevClass}">${(result.severity || "").toUpperCase()}</span>
-      </div>
-      <div class="panel-line">
-        <span class="panel-line__label">Spread</span>
-        <span class="panel-line__value">${result.severity === "critical" || result.severity === "high" ? "Active" : "Contained"}</span>
-      </div>
-      <div class="panel-line">
-        <span class="panel-line__label">Cause</span>
-        <span class="panel-line__value">${result.causes || "-"}</span>
-      </div>
-      ${result.location_insight ? `
-      <div class="panel-line">
-        <span class="panel-line__label">Location insight</span>
-        <span class="panel-line__value">${result.location_insight}</span>
-      </div>` : ""}
-      ${result.nearby_risk ? `
-      <div class="panel-line">
-        <span class="panel-line__label">Nearby risk</span>
-        <span class="panel-line__value">${result.nearby_risk}</span>
-      </div>` : ""}
-
-      <div class="panel-divider"></div>
-
-      <div class="panel-inline-group">
-        <div class="panel-inline-group__label">Treatment protocol</div>
-        <div class="panel-inline-group__content">${pests}</div>
-      </div>
-      ${result.organic_alternative ? `
-      <div class="panel-line">
-        <span class="panel-line__label">Organic option</span>
-        <span class="panel-line__value">${result.organic_alternative}</span>
-      </div>` : ""}
-      ${result.urgency ? `
-      <div class="panel-line">
-        <span class="panel-line__label">Urgency</span>
-        <span class="panel-line__value">${result.urgency}</span>
-      </div>` : ""}
-
-      <div class="panel-divider"></div>
-
-      <div class="panel-inline-group">
-        <div class="panel-inline-group__label">Prevention</div>
-        <ul class="prev-list">${prevention}</ul>
-      </div>
-
-      ${result.government_support ? `
-      <div class="panel-divider"></div>
-      <div class="panel-line">
-        <span class="panel-line__label">Govt support</span>
-        <span class="panel-line__value">${result.government_support}</span>
-      </div>` : ""}
-
-      <div class="panel-divider"></div>
-
-      <div class="panel-sheet__actions">
-        <button class="find-dealers-btn" onclick="shareWhatsApp()">Share analysis</button>
-      </div>
-    </div>`;
-
-  $("analysisPanel").style.display = "flex";
-  syncPanelLayout();
-  // Scroll panel into view smoothly
-  setTimeout(() => {
-    $("analysisPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, 50);
+function setPanelVisible(visible) {
+  $("analysisPanel").style.display = visible ? "flex" : "none";
+  $("appContainer").classList.toggle("cg-app--panel", visible);
+  $("panelOpenBtn").style.display = !visible && state.lastAnalysis ? "inline-grid" : "none";
 }
 
 function updateRiskBadge(severity) {
@@ -585,55 +470,123 @@ function updateRiskBadge(severity) {
     badge.style.display = "none";
     return;
   }
-  const labels = { low: "LOW RISK", moderate: "MODERATE", high: "HIGH RISK", critical: "RISK ALERT" };
-  badge.textContent = labels[severity] || severity.toUpperCase();
-  badge.className = `risk-badge risk-${severity}`;
+  const sev = sevOf({ severity });
+  const labels = { low: "Low risk", moderate: "Moderate risk", high: "High risk", critical: "Critical risk" };
+  badge.textContent = labels[sev];
+  badge.className = `cg-risk cg-risk--${sev}`;
   badge.style.display = "inline-flex";
 }
 
-function shareWhatsApp() {
-  if (!state.lastAnalysis) return;
-  const result = state.lastAnalysis;
-  const text = encodeURIComponent(
-    `CropGuard AI\nPest: ${result.pest_detected}\nSeverity: ${(result.severity || "").toUpperCase()}\n` +
-    `Location: ${result.district_used || "AP"}\nCause: ${result.causes || ""}\n` +
-    `Treatment: ${result.pesticides?.[0]?.brand || ""} ${result.pesticides?.[0]?.dosage || ""}`
-  );
-  window.open(`https://wa.me/?text=${text}`, "_blank");
+/* ---------- Product modal + share ---------- */
+
+function showProductPopup(product) {
+  if (!product) return;
+  const name = product.brand || product.name || "";
+  const q = encodeURIComponent(`${name} pesticide`);
+  const shopQ = encodeURIComponent(name);
+  const row = (k, v) => `<div class="cg-product__row"><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
+  $("productContent").innerHTML = `
+    <div class="cg-product">
+      <h3>${esc(product.name)}</h3>
+      ${product.brand ? `<p class="cg-muted">${esc(product.brand)}</p>` : ""}
+      <dl>
+        ${row("Dosage", product.dosage || "–")}
+        ${row("Apply", product.application || "Foliar spray")}
+        ${row("Safe to harvest after", `${product.safety_days || 14} days`)}
+      </dl>
+      <p class="cg-muted">Available at local AP agri shops and KVK centres.</p>
+      <div class="cg-product__links">
+        <a class="cg-btn" target="_blank" rel="noopener noreferrer" href="https://www.amazon.in/s?k=${q}">Amazon</a>
+        <a class="cg-btn" target="_blank" rel="noopener noreferrer" href="https://www.flipkart.com/search?q=${q}">Flipkart</a>
+        <a class="cg-btn" target="_blank" rel="noopener noreferrer" href="https://agribegri.com/?s=${shopQ}">AgriBegri</a>
+      </div>
+    </div>`;
+  $("productOverlay").style.display = "flex";
 }
 
-window.shareWhatsApp = shareWhatsApp;
+function closeProduct() {
+  $("productOverlay").style.display = "none";
+}
+
+function shareWhatsApp() {
+  const r = state.lastAnalysis;
+  if (!r) return;
+  const text = encodeURIComponent(
+    `CropGuard AI\nPest: ${r.pest_detected}\nSeverity: ${(r.severity || "").toUpperCase()}\n` +
+    `Location: ${r.district_used || state.district || "AP"}\nCause: ${r.causes || ""}\n` +
+    `Treatment: ${r.pesticides?.[0]?.brand || ""} ${r.pesticides?.[0]?.dosage || ""}`
+  );
+  window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
+}
+
+/* ---------- Image attach ---------- */
 
 function handleImgSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
   if (file.size > 10 * 1024 * 1024) {
-    alert("Max 10MB");
+    alert("Photo is larger than 10 MB. Choose a smaller photo.");
+    clearImg();
     return;
   }
   state.imageFile = file;
-  const reader = new FileReader();
-  reader.onload = loadEvent => {
-    $("previewImg").src = loadEvent.target.result;
-    $("imgPreview").style.display = "block";
-  };
-  reader.readAsDataURL(file);
+  $("previewImg").src = URL.createObjectURL(file);
+  $("imgPreview").style.display = "block";
+  updateSendState();
+  $("msgInput").focus();
 }
 
 function clearImg() {
   state.imageFile = null;
   $("imgUpload").value = "";
   $("imgPreview").style.display = "none";
-  $("previewImg").src = "";
+  $("previewImg").removeAttribute("src");
+  updateSendState();
+}
+
+/* ---------- Sessions ---------- */
+
+function resetConversation() {
+  state.sessionId = null;
+  state.lastAnalysis = null;
+  clearImg();
+  setPanelVisible(false);
+  $("suggestionsBar").style.display = "none";
+  updateRiskBadge(null);
+  showWelcome();
+}
+
+async function handleNewChat() {
+  resetConversation();
+  closeDrawer();
+  await loadSessions();
+  $("msgInput").focus();
+}
+
+async function deleteSession(id) {
+  if (!confirm(t("deleteConfirm"))) return;
+  await api(`/api/chat/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (state.sessionId === id) resetConversation();
+  loadSessions();
+}
+
+async function handleClearAll() {
+  if (!confirm(t("deleteAllConfirm"))) return;
+  const sessions = await api("/api/chat/sessions");
+  if (sessions?.length) {
+    await Promise.all(sessions.map(s => api(`/api/chat/sessions/${encodeURIComponent(s.id)}`, { method: "DELETE" })));
+  }
+  resetConversation();
+  loadSessions();
 }
 
 async function createSession() {
   const parts = [state.cropName, state.district].filter(Boolean);
   const res = await api("/api/chat/sessions", {
     method: "POST",
-    body: JSON.stringify({ title: parts.join(" / ") || "New Chat", crop_id: state.cropId || null }),
+    body: JSON.stringify({ title: parts.join(" / ") || "New analysis", crop_id: state.cropId || null }),
   });
-  if (res) {
+  if (res?.id) {
     state.sessionId = res.id;
     loadSessions();
   }
@@ -643,51 +596,46 @@ async function loadSessions() {
   const sessions = await api("/api/chat/sessions");
   const list = $("sessionsList");
   if (!sessions?.length) {
-    list.innerHTML = '<div class="empty-msg">No analyses yet</div>';
+    list.innerHTML = `<div class="cg-sessions__empty">${esc(t("emptyMsg") || "No analyses yet")}</div>`;
     return;
   }
-  list.innerHTML = sessions.slice(0, 15).map(session => `
-    <div class="sess-item ${session.id === state.sessionId ? "active" : ""}" onclick="openSession('${session.id}')">
-      <div class="sess-icon">S</div>
-      <span class="sess-title">${esc(session.session_title || "Chat")}</span>
-      <button class="sess-del" onclick="deleteSession('${session.id}',event)">X</button>
+  list.innerHTML = sessions.slice(0, 30).map(s => `
+    <div class="cg-session ${s.id === state.sessionId ? "cg-session--active" : ""}">
+      <button type="button" class="cg-session__open" data-action="open-session" data-id="${esc(s.id)}">${esc(s.session_title || "Chat")}</button>
+      <button type="button" class="cg-icon-btn cg-session__del" data-action="delete-session" data-id="${esc(s.id)}" aria-label="Delete analysis">${ICONS.trash}</button>
     </div>`).join("");
 }
 
 async function openSession(id) {
+  closeDrawer();
   state.sessionId = id;
   state.lastAnalysis = null;
   $("messages").innerHTML = "";
   $("suggestionsBar").style.display = "none";
-  $("analysisPanel").style.display = "none";
-  syncPanelLayout();
-  const messages = await api(`/api/chat/sessions/${id}/messages`);
-  if (messages) messages.forEach(message => addMsg(message.role === "user" ? "user" : "ai", message.content));
-  const latestAnalysis = await loadLatestAnalysis(id);
-  if (latestAnalysis) {
-    state.lastAnalysis = latestAnalysis;
-    renderPanel(latestAnalysis);
-    updateRiskBadge(latestAnalysis.severity);
-    showSuggestions(latestAnalysis.pest_type);
+  setPanelVisible(false);
+  const messages = await api(`/api/chat/sessions/${encodeURIComponent(id)}/messages`);
+  (messages || []).forEach(m => (m.role === "user" ? addUserMsg(m.content) : addAiText(m.content)));
+  if (!messages?.length) showWelcome();
+  const latest = await loadLatestAnalysis(id);
+  if (latest) {
+    state.lastAnalysis = latest;
+    renderPanel(latest);
+    updateRiskBadge(latest.severity);
+    showSuggestions(latest.pest_type);
   } else {
     updateRiskBadge(null);
   }
   loadSessions();
 }
 
-window.openSession = openSession;
+/* ---------- Data ---------- */
 
 async function loadCrops() {
   const crops = await api("/api/chat/crops");
   if (!crops) return;
   state.allCrops = crops;
   const select = $("cropSelect");
-  crops.forEach(crop => {
-    const option = el("option");
-    option.value = crop.id;
-    option.textContent = crop.name;
-    select.appendChild(option);
-  });
+  crops.forEach(c => select.add(new Option(c.name, c.id)));
 }
 
 async function loadLocations() {
@@ -695,12 +643,7 @@ async function loadLocations() {
   if (!data) return;
   state.locationData = data;
   const select = $("stateSelect");
-  Object.keys(data).sort().forEach(stateName => {
-    const option = el("option");
-    option.value = stateName;
-    option.textContent = stateName;
-    select.appendChild(option);
-  });
+  Object.keys(data).sort().forEach(name => select.add(new Option(name, name)));
 }
 
 async function api(url, opts = {}) {
@@ -718,14 +661,8 @@ async function api(url, opts = {}) {
   }
 }
 
-function syncPanelLayout() {
-  const app = $("appContainer");
-  const visible = $("analysisPanel").style.display !== "none";
-  app.classList.toggle("app--with-panel", visible);
-}
-
 async function loadLatestAnalysis(sessionId) {
-  const backend = await api(`/api/chat/sessions/${sessionId}/analysis`);
+  const backend = await api(`/api/chat/sessions/${encodeURIComponent(sessionId)}/analysis`);
   if (backend && Object.keys(backend).length) {
     persistSessionAnalysis(sessionId, backend);
     return backend;
@@ -735,14 +672,17 @@ async function loadLatestAnalysis(sessionId) {
 
 function persistSessionAnalysis(sessionId, result) {
   if (!sessionId || !result) return;
-  const all = readPersistedAnalyses();
-  all[sessionId] = result;
-  localStorage.setItem(LOCAL_ANALYSIS_KEY, JSON.stringify(all));
+  try {
+    const all = readPersistedAnalyses();
+    all[sessionId] = result;
+    localStorage.setItem(LOCAL_ANALYSIS_KEY, JSON.stringify(all));
+  } catch (error) {
+    // Storage full or blocked: the backend copy is the source of truth.
+  }
 }
 
 function getPersistedSessionAnalysis(sessionId) {
-  const all = readPersistedAnalyses();
-  return all[sessionId] || null;
+  return readPersistedAnalyses()[sessionId] || null;
 }
 
 function readPersistedAnalyses() {
@@ -751,22 +691,4 @@ function readPersistedAnalyses() {
   } catch (error) {
     return {};
   }
-}
-
-function fmt(text) {
-  return String(text)
-    .replace(/^#{1,3}\s+/gm, "")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/\n/g, "<br>");
-}
-
-function esc(text) {
-  return String(text).replace(/[&<>"']/g, match => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  })[match]);
 }

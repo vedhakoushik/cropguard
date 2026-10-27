@@ -1,159 +1,165 @@
 {% extends "base.html" %}
 {% block title %}CropGuard AI - Analysis{% endblock %}
+{% block body_class %}cg-chat{% endblock %}
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+{% endblock %}
 {% block content %}
 
-<div id="langOverlay" class="modal-overlay">
-  <div class="modal-box lang-modal">
-    <div class="modal-icon">CG</div>
+<div id="langOverlay" class="cg-modal" role="dialog" aria-modal="true" aria-labelledby="langModalTitle" style="display:none">
+  <div class="cg-modal__box">
     <h2 id="langModalTitle">Welcome to CropGuard AI</h2>
-    <p id="langModalSubtitle">Choose your preferred language</p>
-    <div class="lang-grid">
-      <button class="lang-btn" data-lang="English">English<span>Default</span></button>
-      <button class="lang-btn" data-lang="Telugu">Telugu<span>Regional support</span></button>
-      <button class="lang-btn" data-lang="Hindi">Hindi<span>National support</span></button>
-      <button class="lang-btn" data-lang="Tamil">Tamil<span>Cross-border support</span></button>
+    <p id="langModalSubtitle">Choose the language for answers</p>
+    <div class="cg-lang-grid">
+      <button class="cg-lang" data-lang="English">English<span>Default</span></button>
+      <button class="cg-lang" data-lang="Telugu">తెలుగు<span>Telugu</span></button>
+      <button class="cg-lang" data-lang="Hindi">हिन्दी<span>Hindi</span></button>
+      <button class="cg-lang" data-lang="Tamil">தமிழ்<span>Tamil</span></button>
     </div>
   </div>
 </div>
 
-<div id="productOverlay" class="modal-overlay" style="display:none">
-  <div class="modal-box modal-box--product">
-    <button class="modal-close" id="closeProduct">X</button>
+<div id="productOverlay" class="cg-modal" role="dialog" aria-modal="true" style="display:none">
+  <div class="cg-modal__box">
+    <button class="cg-icon-btn cg-modal__close" id="closeProduct" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
     <div id="productContent"></div>
   </div>
 </div>
 
-<div class="app" id="appContainer">
-  <div class="chat-ambient-grid"></div>
-  <div class="chat-ambient-noise"></div>
-  <div class="chat-ambient-glow chat-ambient-glow--one"></div>
-  <div class="chat-ambient-glow chat-ambient-glow--two"></div>
+<div class="cg-app" id="appContainer">
+  <div class="cg-scrim" id="sidebarScrim"></div>
 
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar__top">
-      <div class="sidebar__logo">
-        <div class="logo-icon">CG</div>
-        <span>CropGuard<strong>AI</strong></span>
-      </div>
-      <button class="sidebar-toggle" id="sidebarToggle">&lt;</button>
+  <aside class="cg-sidebar" id="sidebar" aria-label="Analyses">
+    <div class="cg-sidebar__head">
+      <a href="/" class="cg-brand">
+        <span class="cg-brand__mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+        </span>
+        CropGuard
+      </a>
+      <button class="cg-icon-btn" id="sidebarToggle" aria-label="Close sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
     </div>
 
-    <button class="btn--new" id="newChatBtn">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span id="newChatText">New Analysis</span>
+    <button class="cg-new" id="newChatBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      <span id="newChatText">New analysis</span>
     </button>
 
-    <div class="sidebar__section-label" id="recentAnalysesLabel">Recent analyses</div>
-    <div class="sidebar__sessions" id="sessionsList">
-      <div class="empty-msg">No analyses yet</div>
-    </div>
+    <div class="cg-sidebar__label" id="recentAnalysesLabel">Recent analyses</div>
+    <nav class="cg-sessions" id="sessionsList">
+      <div class="cg-sessions__empty" data-i18n="emptyMsg">No analyses yet</div>
+    </nav>
 
-    <div class="sidebar__bottom">
-      <div class="sidebar__lang-row">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    <div class="cg-sidebar__foot">
+      <button class="cg-foot-btn" id="changeLangBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         <span id="langLabel">English</span>
-        <button id="changeLangBtn" class="lang-change-btn">Change</button>
-      </div>
-      <a href="https://wa.me/?text=Hello%2C+I+need+crop+pest+help" target="_blank" class="expert-support-btn" id="expertSupportBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        <span id="expertSupportText">Expert Support</span>
+      </button>
+      <a href="https://wa.me/?text=Hello%2C+I+need+crop+pest+help" target="_blank" rel="noopener" class="cg-foot-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span id="expertSupportText">Expert support</span>
       </a>
-      <button id="clearAllBtn" class="clear-all-btn">Clear all history</button>
+      <button class="cg-foot-btn" type="button" data-theme-toggle>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span data-theme-label>Dark mode</span>
+      </button>
+      <button class="cg-foot-btn cg-foot-btn--danger" id="clearAllBtn" type="button">Clear all history</button>
+      {% if current_user %}
+      <form method="post" action="{{ url_for('auth.logout') }}" class="cg-user">
+        <span class="cg-user__avatar" aria-hidden="true">{{ (current_user.full_name or current_user.email or '?')[0]|upper }}</span>
+        <span class="cg-user__name">{{ current_user.full_name or current_user.email }}</span>
+        <button type="submit" class="cg-user__out">Log out</button>
+      </form>
+      {% endif %}
     </div>
   </aside>
 
-  <main class="chat-main">
-    <div class="chat-topbar">
-      <button class="sidebar-open-btn" id="sidebarOpen" style="display:none">Menu</button>
+  <main class="cg-main">
+    <header class="cg-topbar">
+      <button class="cg-icon-btn" id="sidebarOpen" aria-label="Open sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
 
-      <div class="topbar-selects">
-        <div class="topbar-pill" id="cropPill">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <select id="cropSelect" class="topbar-sel"><option value="">Crop</option></select>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-
-        <div class="topbar-pill" id="locationPill">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          <select id="stateSelect" class="topbar-sel"><option value="">State</option></select>
-          <span class="sel-sep">/</span>
-          <select id="districtSelect" class="topbar-sel" disabled><option value="">District</option></select>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-
-        <span id="riskBadge" class="risk-badge" style="display:none"></span>
-      </div>
-
-      <div class="topbar-context">
-        <span class="topbar-context__label" id="liveContextLabel">Live Context</span>
-        <span id="topbarCtx" class="topbar-context__value">Select crop and district</span>
-      </div>
-
-      <div class="topbar-right">
-        <button class="theme-toggle theme-toggle--compact" type="button" data-theme-toggle aria-label="Toggle theme">
-          <span class="theme-toggle__icon">T</span>
-          <span class="theme-toggle__label">Dark mode</span>
-        </button>
-        <div class="topbar-status">
-          <span class="topbar-status__dot"></span>
-          <span id="monitoringStatusText">Monitoring online</span>
-        </div>
-      </div>
-    </div>
-
-    <div id="locationHint" class="location-hint" style="display:none">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      <span id="locationHintText"></span>
-    </div>
-
-    <div class="messages" id="messages"></div>
-
-    <div id="suggestionsBar" class="suggestions-bar" style="display:none">
-      <div id="suggestionChips" class="sug-chips"></div>
-    </div>
-
-    <div class="input-area">
-      <div id="imgPreview" class="img-preview" style="display:none">
-        <img id="previewImg" src="" alt="">
-        <button id="removeImg" class="remove-img">X</button>
-      </div>
-      <div class="input-row">
-        <label class="cam-btn" for="imgUpload">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          <input type="file" id="imgUpload" accept="image/*" style="display:none">
+      <div class="cg-context">
+        <label class="cg-select" id="cropPill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/></svg>
+          <select id="cropSelect" aria-label="Crop"><option value="">Crop</option></select>
         </label>
-        <input type="text" id="msgInput" class="msg-input" placeholder="Type your crop concern">
-        <button id="sendBtn" class="send-btn">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
+        <label class="cg-select" id="locationPill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <select id="stateSelect" aria-label="State"><option value="">State</option></select>
+          <select id="districtSelect" aria-label="District" disabled><option value="">District</option></select>
+        </label>
+        <span id="riskBadge" class="cg-risk" style="display:none"></span>
       </div>
-      <div class="input-disclaimer">AI analysis is assistive. Consult local experts for final treatment.</div>
+
+      <button class="cg-icon-btn cg-topbar__panel" id="panelOpenBtn" aria-label="Show analysis dashboard" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+      </button>
+    </header>
+
+    <div class="cg-scroll" id="messagesScroll">
+      <div id="locationHint" class="cg-hint" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span id="locationHintText"></span>
+      </div>
+      <div class="cg-thread" id="messages" aria-live="polite"></div>
+    </div>
+
+    <div class="cg-dock">
+      <div id="suggestionsBar" class="cg-suggestions" style="display:none">
+        <div id="suggestionChips" class="cg-chips"></div>
+      </div>
+
+      <form class="cg-composer" id="composer">
+        <div id="imgPreview" class="cg-attachment" style="display:none">
+          <img id="previewImg" src="" alt="Selected crop photo">
+          <button type="button" id="removeImg" class="cg-attachment__remove" aria-label="Remove photo">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <textarea id="msgInput" class="cg-composer__input" rows="1" placeholder="Describe the problem or attach a crop photo" aria-label="Message"></textarea>
+        <div class="cg-composer__bar">
+          <label class="cg-icon-btn" for="imgUpload" title="Attach crop photo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <input type="file" id="imgUpload" accept="image/jpeg,image/png,image/webp" hidden>
+          </label>
+          <span class="cg-composer__ctx" id="topbarCtx">Select crop and district</span>
+          <button type="submit" id="sendBtn" class="cg-send" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </form>
+      <p class="cg-disclaimer" data-i18n="inputDisclaimer">AI analysis is assistive. Consult local experts for final treatment.</p>
     </div>
   </main>
 
-  <aside id="analysisPanel" class="analysis-panel" style="display:none">
-    <div class="panel-topbar">
-      <div class="panel-title">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span id="analysisDashboardTitle">Analysis Dashboard</span>
-      </div>
-      <div class="panel-actions">
-        <button class="panel-btn" id="panelShareBtn" title="Share via WhatsApp">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+  <aside id="analysisPanel" class="cg-panel" aria-label="Analysis dashboard" style="display:none">
+    <div class="cg-panel__head">
+      <span id="analysisDashboardTitle">Analysis dashboard</span>
+      <div class="cg-panel__actions">
+        <button class="cg-icon-btn" id="panelShareBtn" title="Share via WhatsApp" aria-label="Share via WhatsApp">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
         </button>
-        <button class="panel-btn" id="closePanel">X</button>
+        <button class="cg-icon-btn" id="closePanel" aria-label="Close dashboard">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
     </div>
-    <div id="panelContent" class="panel-content">
-      <div class="panel-empty">
-        <div class="panel-empty-icon">AI</div>
-        <p id="panelEmptyText">Upload a crop photo to see your analysis dashboard.</p>
-      </div>
+    <div id="panelContent" class="cg-panel__body">
+      <p class="cg-muted" id="panelEmptyText">Upload a crop photo to see your analysis dashboard.</p>
     </div>
   </aside>
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='vendor/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/purify.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/translations.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

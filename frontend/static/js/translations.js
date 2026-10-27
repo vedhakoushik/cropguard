@@ -24,6 +24,7 @@ const TRANSLATIONS = {
     
     // Messages and Welcome
     "welcomeMsg": "Welcome back. Select your <strong>crop</strong> and <strong>district</strong>, then upload a photo or describe the problem.",
+    "welcomeTitle": "What's wrong with your crop?",
     "uploadPhotoBtnText": "Upload Crop Photo",
     "yellowLeavesBtnText": "Yellow leaves",
     "fruitDamageBtnText": "Fruit damage",
@@ -102,6 +103,7 @@ const TRANSLATIONS = {
     
     // Messages and Welcome
     "welcomeMsg": "తిరిగి స్వాగతం. మీ <strong>పంట</strong> మరియు <strong>జిల్లాను</strong> ఎంచుకోండి, ఆపై ఫోటో అప్‌లోడ్ చేయండి లేదా సమస్యను వివరించండి.",
+    "welcomeTitle": "మీ పంటకు ఏమైంది?",
     "uploadPhotoBtnText": "పంట ఫోటో అప్‌లోడ్ చేయండి",
     "yellowLeavesBtnText": "పసుపు ఆకులు",
     "fruitDamageBtnText": "ఫలాల నష్టం",
@@ -180,6 +182,7 @@ const TRANSLATIONS = {
     
     // Messages and Welcome
     "welcomeMsg": "स्वागत है। अपनी <strong>फसल</strong> और <strong>जिला</strong> चुनें, फिर एक फोटो अपलोड करें या समस्या का वर्णन करें।",
+    "welcomeTitle": "आपकी फसल में क्या समस्या है?",
     "uploadPhotoBtnText": "फसल फोटो अपलोड करें",
     "yellowLeavesBtnText": "पीली पत्तियाँ",
     "fruitDamageBtnText": "फल को नुकसान",
@@ -258,6 +261,7 @@ const TRANSLATIONS = {
     
     // Messages and Welcome
     "welcomeMsg": "வரவேற்கிறோம். உங்கள் <strong>பயிர்</strong> மற்றும் <strong>மாவட்டத்தைத்</strong> தேர்ந்தெடுக்கவும், பின்னர் ஒரு ஆলோசனை பயிரைத் தெরிவாக்கவும் அல்லது சிக்கலை விளக்கவும்.",
+    "welcomeTitle": "உங்கள் பயிருக்கு என்ன பிரச்சனை?",
     "uploadPhotoBtnText": "பயிர் புகைப்படத்தை பதிவேற்றவும்",
     "yellowLeavesBtnText": "மஞ்சள் இலைகள்",
     "fruitDamageBtnText": "பழ சேதம்",
@@ -326,11 +330,8 @@ function applyTranslations(lang) {
     "newChatText": "newChatText",
     "recentAnalysesLabel": "recentAnalysesLabel",
     "langLabel": "langLabel",
-    "changeLangBtn": "changeLangBtn",
-    "expertSupportBtn": "expertSupportBtn",
+    "expertSupportText": "expertSupportBtn",
     "clearAllBtn": "clearAllBtn",
-    "monitoringStatusText": "monitoringStatusText",
-    "liveContextLabel": "liveContextLabel",
     "topbarCtx": "selectCropAndDistrict",
     "analysisDashboardTitle": "analysisDashboardTitle",
     "panelEmptyText": "panelEmptyText",
@@ -353,14 +354,6 @@ function applyTranslations(lang) {
   
   const msgInput = document.getElementById("msgInput");
   if (msgInput) msgInput.placeholder = trans["msgInputPlaceholder"] || "Type your crop concern";
-
-  // Update sidebar empty message
-  const emptyMsg = document.querySelector(".empty-msg");
-  if (emptyMsg) emptyMsg.textContent = trans["emptyMsg"] || "No analyses yet";
-
-  // Update input disclaimer
-  const disclaimer = document.querySelector(".input-disclaimer");
-  if (disclaimer) disclaimer.textContent = trans["inputDisclaimer"] || "AI analysis is assistive. Consult local experts for final treatment.";
 }
 
 window.applyTranslations = applyTranslations;
