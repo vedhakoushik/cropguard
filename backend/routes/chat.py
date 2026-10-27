@@ -97,7 +97,9 @@ def get_latest_analysis(session_id):
         return jsonify({}), 200
     try:
         row = fetch_one(
-            "SELECT * FROM analysis_results WHERE session_id = %s ORDER BY created_at DESC LIMIT 1",
+            "SELECT a.*, ci.ai_confidence FROM analysis_results a "
+            "LEFT JOIN crop_images ci ON ci.id = a.image_id "
+            "WHERE a.session_id = %s ORDER BY a.created_at DESC LIMIT 1",
             (sid,),
         )
         if not row:

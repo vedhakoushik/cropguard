@@ -174,7 +174,7 @@ def analyze():
                 f"⚠️ Severity: {(ai.get('severity') or '').upper()}\n\n"
                 f"Cause: {ai.get('causes','—')}\n\n"
                 f"Treatment:\n{pest_list or '• No pesticide needed'}\n\n"
-                f"Prevention: {ai.get('prevention_tips','—')}"
+                f"Prevention:\n{ai.get('prevention_tips') or '—'}"
             )
             execute(
                 "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, 'assistant', %s)",

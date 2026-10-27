@@ -426,8 +426,8 @@ function renderAnalysisMsg(result) {
 
 function renderPanel(result) {
   const sev = sevOf(result);
-  const tips = String(result.prevention_tips || "")
-    .split(/\n|•/)
+  const rawTips = result.prevention_tips;
+  const tips = (Array.isArray(rawTips) ? rawTips.map(String) : String(rawTips || "").split(/\n|•/))
     .map(s => s.replace(/^[-*\s]+/, "").trim())
     .filter(Boolean);
   const section = (title, body) => body ? `<section class="cg-panel__section"><h3>${title}</h3>${body}</section>` : "";
@@ -442,9 +442,9 @@ function renderPanel(result) {
     </div>
     <dl class="cg-facts">
       <div><dt>Severity</dt><dd class="cg-sev--${sev}">${esc(sev[0].toUpperCase() + sev.slice(1))}</dd></div>
-      <div><dt>Match</dt><dd>${result.confidence ? `${esc(result.confidence)}%` : "–"}</dd></div>
+      ${result.confidence ? `<div><dt>Match</dt><dd>${esc(result.confidence)}%</dd></div>` : ""}
       <div><dt>Spread</dt><dd>${sev === "high" || sev === "critical" ? "Active" : "Contained"}</dd></div>
-      <div><dt>Type</dt><dd>${esc(result.pest_type || "–")}</dd></div>
+      ${result.pest_type ? `<div><dt>Type</dt><dd>${esc(result.pest_type)}</dd></div>` : ""}
     </dl>
     ${section("Cause", para(result.causes))}
     ${section("Location insight", para(result.location_insight))}

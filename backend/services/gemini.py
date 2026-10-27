@@ -280,6 +280,13 @@ def build_fallback_chat(message, context=None):
     return f"I could not reach the live AI service just now, but for {crop} in {district}, focus first on checking symptom spread, removing heavily affected parts, and starting treatment early for {pest}."
 
 
+def _bullet_text(value) -> str:
+    """Gemini sometimes returns a list where the prompt asks for text; store one bullet per line."""
+    if isinstance(value, (list, tuple)):
+        return "\n".join(f"• {str(item).strip().lstrip('•-* ').strip()}" for item in value if str(item).strip())
+    return str(value or "").strip()
+
+
 def analyze_crop_image(image_bytes, crop_name, mime_type="image/jpeg",
                        location="", district="", location_stats=None, language="English"):
     dist_display = district or "Andhra Pradesh"
@@ -319,6 +326,7 @@ def analyze_crop_image(image_bytes, crop_name, mime_type="image/jpeg",
             if raw.startswith("json"): raw = raw[4:]
         raw = raw.strip()
         result = json.loads(raw)
+        result["prevention_tips"] = _bullet_text(result.get("prevention_tips"))
         result["location_used"] = location or "Andhra Pradesh"
         result["district_used"] = dist_display
         return {"success": True, "data": result}
